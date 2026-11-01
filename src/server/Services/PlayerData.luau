@@ -1,6 +1,7 @@
 -- PlayerData: carrega, guarda e salva o progresso de cada jogador.
 local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
+local Strings = require(game:GetService("ReplicatedStorage").Shared.Strings)
 
 local STORE = DataStoreService:GetDataStore("PlayerData_v1") -- "gaveta" no banco do Roblox
 local AUTOSAVE_SECONDS = 120
@@ -73,7 +74,7 @@ local function load(player)
     if not ok then
         -- Falhou o carregamento: tira o jogador do servidor em vez de jogar com perfil vazio.
         -- Se ele ficasse, o salvamento sobrescreveria o progresso real com zeros.
-        player:Kick("Não conseguimos carregar seu progresso. Entre de novo. / Couldn't load your progress, please rejoin.")
+        player:Kick(Strings.For(player.LocaleId).loadFailed)
         return
     end
     if not player.Parent then return end -- saiu enquanto carregava
