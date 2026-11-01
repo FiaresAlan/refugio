@@ -1,5 +1,6 @@
 local C = require(script.Parent.MapConfig)
 local TerrainGen = {}
+TerrainGen.Version = 2
 
 local B, V, M = C.Bounds, C.Voxel, Enum.Material
 local SEED = C.Seed * 0.001
@@ -21,8 +22,13 @@ end
 
 local function villageDist(x, z)
     local v = C.Village
-    local dx = math.max(math.abs(x - v.Center.X) - v.Half, 0)
-    local dz = math.max(math.abs(z - v.Center.Y) - v.Half, 0)
+    local cx, cz = v.Center.X, v.Center.Y
+    if v.Radius then -- versão nova: vila redonda
+        return math.max(math.sqrt((x - cx) ^ 2 + (z - cz) ^ 2) - v.Radius, 0)
+    end
+    local half = v.Half or 110 -- versão antiga: quadrado
+    local dx = math.max(math.abs(x - cx) - half, 0)
+    local dz = math.max(math.abs(z - cz) - half, 0)
     return math.sqrt(dx * dx + dz * dz)
 end
 
@@ -74,12 +80,6 @@ function TerrainGen.Height(x, z)
     local dm = (p - m.Center).Magnitude
     h += m.Height * math.exp(-(dm / m.Radius) ^ 2)
 
-    local clear = smooth(td / C.PeakTrailClear)
-    for _, p in C.Peaks do
-        local d = math.sqrt((x - p[1]) ^ 2 + (z - p[2]) ^ 2)
-        local shape = 0.8 + 0.4 * math.noise(x / 22, z / 22, SEED + 50)
-        h += p[4] * shape * math.exp(-(d / p[3]) ^ 2) * wild * clear
-    end
     if td < C.TrailWidth then
         h -= 0.8 * (1 - td / C.TrailWidth)
     end

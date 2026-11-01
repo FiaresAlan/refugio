@@ -76,7 +76,7 @@ local function buildMarkers(folder)
         invisiblePart(folder, name, Vector3.new(2, 2, 2), CFrame.new(x, y or TerrainGen.Height(x, z) + 1, z))
     end
     mark("Marker_Plaza", 0, 0)
-    mark("Marker_VillageGate", 0, -110)
+    mark("Marker_VillageGate", 0, -150)
     mark("Marker_CaveEntrance", 0, -840)
     mark("Marker_BridgeSite", TerrainGen.RiverX(C.BridgeZ), C.BridgeZ, C.River.WaterLevel + 3)
 end

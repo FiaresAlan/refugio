@@ -19,6 +19,7 @@ local DEFAULT = {
 
 local PlayerData = {}
 local profiles = {} -- [Player] = tabela de dados em memória
+local saved = setmetatable({}, { __mode = "k" }) -- [Player] = true (já salvo no encerramento)
 
 local function deepCopy(t)
     local copy = {}
@@ -99,8 +100,62 @@ local function save(player)
     end)
 end
 
+-- Salva uma única vez por jogador no encerramento.
+-- Evita double-save: PlayerRemoving e BindToClose podem disparar juntos.
+local function saveOnce(player)
+    if saved[player] then return end
+    saved[player] = true
+    save(player)
+end
+
 function PlayerData.Get(player)
     return profiles[player]
+end
+
+-- ===== API de moedas =====
+-- Sempre atualiza a memória (profiles) e o placar (leaderstats) juntos.
+-- Assim o save() grava o valor correto e o jogador vê o saldo atualizado.
+
+local function syncLeaderstats(player, data)
+    local stats = player:FindFirstChild("leaderstats")
+    if stats then
+        local coins = stats:FindFirstChild("Moedas")
+        if coins and coins:IsA("IntValue") then
+            coins.Value = data.coins
+        end
+    end
+end
+
+-- Adiciona (ou remove, se negativo) moedas. Retorna o novo saldo.
+function PlayerData.AddCoins(player, amount)
+    local data = profiles[player]
+    if not data then return 0 end
+    data.coins = math.max(0, data.coins + math.floor(amount))
+    syncLeaderstats(player, data)
+    return data.coins
+end
+
+-- Tenta gastar moedas. Retorna true se conseguiu, false se não tinha.
+function PlayerData.SpendCoins(player, amount)
+    local data = profiles[player]
+    if not data or data.coins < amount then return false end
+    data.coins -= math.floor(amount)
+    syncLeaderstats(player, data)
+    return true
+end
+
+function PlayerData.GetCoins(player)
+    local data = profiles[player]
+    return data and data.coins or 0
+end
+
+-- Define o saldo diretamente (ex: admin, correção).
+function PlayerData.SetCoins(player, amount)
+    local data = profiles[player]
+    if not data then return 0 end
+    data.coins = math.max(0, math.floor(amount))
+    syncLeaderstats(player, data)
+    return data.coins
 end
 
 function PlayerData.Start()
@@ -108,17 +163,20 @@ function PlayerData.Start()
     for _, p in Players:GetPlayers() do task.spawn(load, p) end -- quem já entrou antes do script
 
     Players.PlayerRemoving:Connect(function(player)
-        save(player)
+        saveOnce(player)
         profiles[player] = nil -- libera memória
+        -- não limpa saved[player]: previne BindToClose de salvar de novo
     end)
 
     -- Servidor desligando: salva todos em paralelo (o Roblox dá até 30s)
     game:BindToClose(function()
         local pending = 0
-        for player in profiles do
+        local snapshot = {}
+        for player in profiles do table.insert(snapshot, player) end
+        for _, player in snapshot do
             pending += 1
             task.spawn(function()
-                save(player)
+                saveOnce(player)
                 pending -= 1
             end)
         end
@@ -129,7 +187,9 @@ function PlayerData.Start()
     task.spawn(function()
         while true do
             task.wait(AUTOSAVE_SECONDS)
-            for player in profiles do task.spawn(save, player) end
+            local snapshot = {}
+            for player in profiles do table.insert(snapshot, player) end
+            for _, player in snapshot do task.spawn(save, player) end
         end
     end)
 end

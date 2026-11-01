@@ -6,13 +6,25 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local DayNight = require(Shared:WaitForChild("DayNight"))
-local Strings = require(Shared:WaitForChild("Strings")).For(Players.LocalPlayer.LocaleId)
 
--- espera o servidor marcar o início do ciclo
-while workspace:GetAttribute("CycleStart") == nil do
-    workspace:GetAttributeChangedSignal("CycleStart"):Wait()
+-- LocaleId pode vir vazio no primeiro frame; espera sincronizar (máx 2s)
+local player = Players.LocalPlayer
+local locale = player.LocaleId
+if locale == "" then
+    for _ = 1, 20 do
+        task.wait(0.1)
+        locale = player.LocaleId
+        if locale ~= "" then break end
+    end
 end
+local Strings = require(Shared:WaitForChild("Strings")).For(locale)
+
+-- espera o servidor marcar o início do ciclo (sem race: lê, se faltar espera uma vez)
 local start = workspace:GetAttribute("CycleStart")
+if not start then
+    workspace:GetAttributeChangedSignal("CycleStart"):Wait()
+    start = workspace:GetAttribute("CycleStart")
+end
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "Hud"
@@ -34,6 +46,6 @@ Instance.new("UICorner", label).CornerRadius = UDim.new(0, 10)
 RunService.RenderStepped:Connect(function()
     local s = DayNight.GetState(start)
     Lighting.ClockTime = s.clock
-    local left = math.max(0, math.floor(s.secondsLeft))
+    local left = math.max(1, math.floor(s.secondsLeft))
     label.Text = ("%s  %d:%02d"):format(Strings["phase" .. s.phase], left // 60, left % 60)
 end)

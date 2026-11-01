@@ -3,3 +3,7 @@
 *.rbxl.lock
 *.rbxlx.lock
 sourcemap.json
+
+# Documentos de referência (não vão para o repo)
+*.pdf
+refugio_plano*.html

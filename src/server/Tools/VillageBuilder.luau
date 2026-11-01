@@ -13,6 +13,7 @@ local CONFIG = {
     GateWidth = 16,
     Seed = 2026, -- mesma seed = mesma vila
     MaxTrees = 36,
+    FlattenTerrain = true, -- aplaina o platô na altura do VillageCenter (garante muralha no chão)
 }
 
 local M = Enum.Material
@@ -162,11 +163,20 @@ local function lampPost(parent, x, z)
 end
 
 -- ===== natureza (usa os modelos da 3.3 se existirem) =====
+local ALIASES = { Tree = { "tree" }, Bush = { "plant_bush", "bush" }, Rock = { "rock" }, Flower = { "flower" } }
+local function matchesPrefix(name, prefix)
+    local n = string.lower(name)
+    for _, a in ALIASES[prefix] or { string.lower(prefix) } do
+        if string.sub(n, 1, #a) == a then return true end
+    end
+    return false
+end
+
 local function placeAsset(prefix, cf, height, parent)
     if not nature then return nil end
     local list = {}
     for _, c in nature:GetChildren() do
-        if c:IsA("PVInstance") and string.sub(c.Name, 1, #prefix) == prefix then
+        if c:IsA("PVInstance") and matchesPrefix(c.Name, prefix) then
             table.insert(list, c)
         end
     end
@@ -456,6 +466,7 @@ local function terrain()
     local T = workspace.Terrain
     local c = BASE.Position
     local R = CONFIG.Radius + 12
+    if CONFIG.FlattenTerrain then
     for k = 5, 1, -1 do -- saia em degraus para fundir com o relevo
         T:FillCylinder(CFrame.new(c + Vector3.new(0, -k * 3 - 15, 0)), 30, R + k * 9, M.Grass)
     end
@@ -464,6 +475,7 @@ local function terrain()
     end
     T:FillCylinder(CFrame.new(c + Vector3.new(0, 60, 0)), 120, R, M.Air)
     T:FillCylinder(CFrame.new(c + Vector3.new(0, -15, 0)), 30, R, M.Grass)
+    end
 
     local function path(x, z, w, d)
         T:FillBlock(L(x, -2, z), Vector3.new(w, 4, d), M.Cobblestone)
@@ -880,13 +892,6 @@ function Builder.Build()
     buildPlots()
     scatterNature()
 
-    local zone = part(zonesF, Vector3.new(CONFIG.Radius * 2 + 10, 120, CONFIG.Radius * 2 + 10), L(0, 50, 0), C.Leaf, nil, { name = "Vila", transparency = 1 })
-    zone.CanCollide = false
-    zone.CanQuery = false
-    zone.CastShadow = false
-    zone:SetAttribute("Gen", "Village")
-    zone:SetAttribute("ZoneType", "Village")
-    zone:SetAttribute("Safe", true)
 
     local sp = Instance.new("SpawnLocation")
     sp.Name = "Spawn_Praca"
@@ -897,6 +902,7 @@ function Builder.Build()
     sp.CanCollide = false
     sp.CanQuery = false
     sp.Neutral = true
+    sp.Enabled = false -- o spawn oficial é o Spawn_ForestEdge
     sp.Duration = 0
     sp:SetAttribute("Gen", "Village")
     sp:SetAttribute("Kind", "Respawn")
