@@ -21,7 +21,7 @@ local CFG = {
 	MaxTrees = 1800,
 	MaxDetails = 2200,
 	MaxBridges = 4,
-	GiantChance = 0.035,    -- chance de arvore GIGANTE (110-170 studs)
+	GiantChance = 0.02,    -- chance de arvore GIGANTE (110-170 studs)
 	TallChance = 0.17,      -- chance de arvore alta (50-80 studs)
 }
 
@@ -38,18 +38,20 @@ local params = RaycastParams.new()
 params.FilterType = Enum.RaycastFilterType.Exclude
 
 local function ground(x, z)
-	local r = Workspace:Raycast(Vector3.new(x, 1500, z), Vector3.new(0, -3000, 0), params)
-	if r then return r.Position, r.Material, r.Normal end
-	return nil
+    local r = Workspace:Raycast(Vector3.new(x, 1500, z), Vector3.new(0, -3000, 0), params)
+    if r then return r.Position, r.Material, r.Normal, r.Instance end
+    return nil
 end
 
 local function okGround(x, z, maxSlope)
-	local pos, mat, nrm = ground(x, z)
-	if not pos then return nil, "vazio" end
-	if BLOCK[mat] then return nil, mat.Name end
-	if nrm.Y < (maxSlope or 0.8) then return nil, "inclinado" end
-	return pos
+    local pos, mat, nrm, inst = ground(x, z)
+    if not pos then return nil, "vazio" end
+    if inst ~= Workspace.Terrain then return nil, "nao-terreno" end
+    if BLOCK[mat] then return nil, mat.Name end
+    if nrm.Y < (maxSlope or 0.8) then return nil, "inclinado" end
+    return pos
 end
+
 
 local function freshFolder(name)
 	local root = S.root
@@ -126,6 +128,7 @@ local function prep(inst, shadow)
 	end
 end
 
+-- coloca um asset no chao, escalando para uma altura (ou maior dimensao) alvo
 local function put(asset, pos, target, parent, useMax, shadow)
 	local c = asset:Clone()
 	local s = sizeOf(c)
@@ -156,6 +159,13 @@ local function nearGate(x, z, dist)
 		if off.Unit:Dot(g) > 0.96 and off.Magnitude < S.R + dist then return true end
 	end
 	return false
+end
+
+local function naVila(x, z, margem)
+    local dx, dz = math.abs(x - S.center.X), math.abs(z - S.center.Z)
+    local box = math.max(dx, dz) < 110 + margem
+    local circ = Vector3.new(dx, 0, dz).Magnitude < S.R + margem
+    return box or circ
 end
 
 ----------------------------------------------------------------- FLORESTA
@@ -189,13 +199,9 @@ function M.Forest()
 			local z = gz + S.rng:NextNumber(-12, 12)
 			local d = Vector3.new(x - c.X, 0, z - c.Z).Magnitude
 			local density = 0.5 + math.noise(x / 280, z / 280, 3.3) * 1.2
-			if d < R - 8 then
-				density = (d > R * 0.7) and 0.45 or 0
-			elseif d < R + 8 then
-				density = 0
-			elseif d < R + 260 then
-				density += 0.25
-			end
+			local skip = false
+			if naVila(x, z, 10) or nearGate(x, z, 60) then continue end
+
 			if nearGate(x, z, 220) then density = 0 end
 			density = math.clamp(density, 0, 0.95)
 			if S.rng:NextNumber() < density then
@@ -213,7 +219,7 @@ function M.Forest()
 					local roll = S.rng:NextNumber()
 					local h, asset
 					local conifer = math.noise(x / 400, z / 400, 9.1) > -0.05
-					if not inside and d > R + 60 and roll < CFG.GiantChance then
+					if not inside and d > R + 120 and roll < CFG.GiantChance then
 						h = S.rng:NextNumber(110, 170); asset = pick(tallPines); giants += 1
 					elseif not inside and roll < CFG.TallChance then
 						h = S.rng:NextNumber(50, 80); asset = pick(conifer and conifers or broad); talls += 1
@@ -244,7 +250,9 @@ function M.Forest()
 		end
 	end
 	print(("[Nature] arvores=%d (gigantes=%d, altas=%d)"):format(placed, giants, talls))
+	for k, v in pairs(rej) do print("   rejeitado por " .. k .. ": " .. v) end
 
+	-- detalhes: flores, arbustos, pedras, troncos, cogumelos
 	local flowers, bushes = pool({ "flower" }), pool({ "plant_bush", "bush" })
 	local rocksS, rocksL = pool({ "rock_small" }), pool({ "rock_large" })
 	local logs, stumps, mush = pool({ "log" }), pool({ "stump" }), pool({ "mushroom" })
@@ -329,9 +337,9 @@ function M.Walls()
 	local c, R, H = S.center, S.R, CFG.WallHeight
 	local stone = Color3.fromRGB(128, 122, 110)
 	local wood = Color3.fromRGB(122, 52, 40)
-	local N_Seg = math.floor(2 * math.pi * R / CFG.SegLen)
+	local N = math.floor(2 * math.pi * R / CFG.SegLen)
 	local function ring(i)
-		local a = (i / N_Seg) * math.pi * 2
+		local a = (i / N) * math.pi * 2
 		local x, z = c.X + math.cos(a) * R, c.Z + math.sin(a) * R
 		local p = ground(x, z)
 		return Vector3.new(x, p and p.Y or c.Y, z)
@@ -344,8 +352,8 @@ function M.Walls()
 		table.insert(gates, { pos = Vector3.new(x, p and p.Y or c.Y, z), tan = Vector3.new(-math.sin(a), 0, math.cos(a)) })
 	end
 	local pts = {}
-	for i = 0, N_Seg do pts[i] = ring(i % N_Seg) end
-	for i = 0, N_Seg - 1 do
+	for i = 0, N do pts[i] = ring(i % N) end
+	for i = 0, N - 1 do
 		if i % 20 == 0 then task.wait() end
 		local a, b = pts[i], pts[i + 1]
 		local mid = (a + b) / 2
@@ -390,7 +398,7 @@ function M.Walls()
 		local look = CFrame.lookAt(Vector3.new(base.X, base.Y + gh - 1, base.Z), Vector3.new(base.X, base.Y + gh - 1, base.Z) + g.tan)
 		block(f, Vector3.new(4, 4, CFG.GateWidth + 14), look, wood, Enum.Material.Wood)
 	end
-	print("[Nature] muro com " .. N_Seg .. " segmentos, " .. #gates .. " portao(oes)")
+	print("[Nature] muro com " .. N .. " segmentos, " .. #gates .. " portao(oes)")
 end
 
 ----------------------------------------------------------------- PONTES
