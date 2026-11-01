@@ -6,6 +6,7 @@
     "ServerScriptService": { "Server": { "$path": "src/server" } },
     "ServerStorage": {
     "$className": "ServerStorage",
+    "$ignoreUnknownInstances": true,
     "MapGen": { "$path": "src/mapgen" }
     },
     "StarterPlayer": {
