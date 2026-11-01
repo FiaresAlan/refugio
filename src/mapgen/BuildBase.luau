@@ -77,7 +77,7 @@ local function buildMarkers(folder)
     end
     mark("Marker_Plaza", 0, 0)
     mark("Marker_VillageGate", 0, -150)
-    mark("Marker_CaveEntrance", 0, -840)
+    mark("Marker_CaveEntrance", C.Cave.Entrance.X, C.Cave.Entrance.Y)
     mark("Marker_BridgeSite", TerrainGen.RiverX(C.BridgeZ), C.BridgeZ, C.River.WaterLevel + 3)
 end
 
@@ -110,6 +110,7 @@ function BuildBase.Run(opts)
     setupLighting()
     setupTerrainLook()
     if opts.terrain ~= false then
+        workspace.Terrain:Clear() -- limpa o terreno antigo: nada de relevo velho misturado com o novo
         TerrainGen.Build()
     end
     buildZones(zones)
